@@ -28,7 +28,7 @@
             (send c :worldpos)
             (car (send c :rpy-angle)))))
 
-(defun execute-cb (server goal &key(devide? nil))
+(defun execute-cb (server goal &key(devide? t))
   (ros::ros-info "execute-cb")
   (let ((footstep (send goal :goal :footstep)))
     (ros::publish "/footstep_goal" footstep)
@@ -53,7 +53,7 @@
     (if (equal (send (car footstep-coords) :name) ':lleg)
 	(progn (setq current-leg-coords (send *robot* :rleg :end-coords :copy-worldcoords))
 	       (setq pre-leg-coords (send *robot* :lleg :end-coords :copy-worldcoords)))
-      	(progn (setq current-leg-coords (send *robot* :lleg :end-coords :copy-worldcoords))
+      (progn (setq current-leg-coords (send *robot* :lleg :end-coords :copy-worldcoords))
 	       (setq pre-leg-coords (send *robot* :rleg :end-coords :copy-worldcoords))))
     (dolist (fc footstep-coords)
       (setq tfc (make-coords :pos (v- (send fc :pos)
@@ -63,9 +63,10 @@
       (if stair-flg
 	  (if (> error-threshold (abs (- (elt (send tfc :pos) 2) (elt (send pre-leg-coords :pos) 2))))
 	      (progn 
+		(setq devided-foot-coords (append devided-foot-coords (list tfc)))
 		(send *ri* :set-foot-steps devided-foot-coords)
 		(send *ri* :set-gait-generator-param :default-orbit-type :cycloid)
-		(setq foot-midcoords (midcoords 0.5 tfc current-rleg-coords))
+		(setq foot-midcoords (midcoords 0.5 tfc current-leg-coords))
 		(ros::ros-info "set gait generator param :cycloid" (ros::get-name))
 		(setq stair-flg nil)
 		(setq devided-foot-coords tfc)
@@ -77,12 +78,13 @@
 	(progn
 	  (if (> (abs (elt (send tfc :pos) 2)) (+ (elt (send pre-leg-coords :pos) 2) hegiht-threshold))
 	      (progn
-		(send *ri* :set-foot-steps devided-foot-coords)
-		(setq foot-midcoords (midcoords 0.5 current-rleg-coords pre-leg-coords))
+		(when (> (length devided-foot-coords) 1)
+		  (send *ri* :set-foot-steps devided-foot-coords)
+		  (setq foot-midcoords (midcoords 0.5 current-leg-coords pre-leg-coords)))
 		(send *ri* :set-gait-generator-param :default-orbit-type :stair)
 		(ros::ros-info "set gait generator param :stair" (ros::get-name))
 		(setq stair-flg t)
-		(setq devided-foot-coords tfc)
+		(setq devided-foot-coords (list cuurent-leg-coords tfc))
 		)
 	    (if devided-foot-coords
 		(setq devided-foot-coords (append devided-foot-coords (list tfc)))
