@@ -1,0 +1,46 @@
+<launch>
+  <arg name="FOOTSTEP_ARRAY" default="/footstep_from_marker"/>
+  <arg name="CAMERA_INFO" default="/camera/rgb/camera_info"/>
+  <arg name="INPUT_IMAGE" default="/camera/rgb/image_rect_color"/>
+  <arg name="INPUT_POINTCLOUD" default="/pointcloud_model_generator/output"/>
+
+  <node pkg="jsk_footstep_planner" type="footstep_array_to_bounding_box_array.py" name="footstep_to_bounding_box" output="screen">
+    <remap from="~input" to="$(arg FOOTSTEP_ARRAY)"/>
+    <remap from="~output/box" to="/footstep_to_bounding_box/output"/>
+    <rosparam>
+     z_max : 0.15
+     z_min : 0.03
+    </rosparam>
+  </node>
+
+  <node pkg="jsk_pcl_ros" type="attention_clipper" name="footstep_attention_clipper" output="screen">
+    <remap from="~input/points" to="$(arg INPUT_POINTCLOUD)"/>
+    <remap from="~input/box_array" to="/footstep_to_bounding_box/output"/>
+    <rosparam>
+      use_multiple_attention: true
+    </rosparam>
+  </node>
+
+  <node pkg="nodelet" type="nodelet" name="footstep_indices_manager" args="manager">
+  </node>
+  <node pkg="nodelet" type="nodelet" name="extract_indices" args="load pcl/ExtractIndices footstep_indices_manager">
+    <remap from="~input" to="$(arg INPUT_POINTCLOUD)" />
+    <remap from="~indices" to="footstep_attention_clipper/output/point_indices" />
+    <remap from="~output" to="extract_indices/output" />
+  </node>
+  <node pkg="nodelet" type="nodelet"
+        name="cluster_decomposer"
+        args="load jsk_pcl/ClusterPointIndicesDecomposerZAxis footstep_indices_manager"
+        output="screen">
+    <remap from="~input" to="$(arg INPUT_POINTCLOUD)" />
+    <remap from="~target" to="/footstep_attention_clipper/output/cluster_point_indices" />
+    <rosparam>
+      publish_clouds: false
+      publish_tf: false
+    </rosparam>
+  </node>
+  
+  <node pkg="jsk_perception" type="edge_detecotor" name="obstacle_edge_detector">
+    <remap INPUT="$(arg INPUT_IMAGE)" />
+  </node>
+</launch>
