@@ -40,7 +40,7 @@
     </rosparam>
   </node>
   
-  <node pkg="jsk_perception" type="edge_detecotor" name="obstacle_edge_detector">
-    <remap INPUT="$(arg INPUT_IMAGE)" />
-  </node>
+  <!-- <node pkg="jsk_perception" type="edge_detecotor" name="obstacle_edge_detector"> -->
+  <!--   <remap INPUT="$(arg INPUT_IMAGE)" /> -->
+  <!-- </node> -->
 </launch>
