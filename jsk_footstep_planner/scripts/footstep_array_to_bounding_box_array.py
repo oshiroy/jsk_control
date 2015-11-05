@@ -24,4 +24,3 @@ if __name__ == "__main__":
     pub = rospy.Publisher("~output", BoundingBoxArray)
     sub = rospy.Subscriber("~input", FootstepArray, callback)
     rospy.spin()
-    
