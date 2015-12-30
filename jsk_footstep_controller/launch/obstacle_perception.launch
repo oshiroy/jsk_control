@@ -1,17 +1,26 @@
 <launch>
   <arg name="FOOTSTEP_ARRAY" default="/footstep_from_marker"/>
-  <arg name="CAMERA_INFO" default="/camera/rgb/camera_info"/>
-  <arg name="INPUT_IMAGE" default="/camera/rgb/image_rect_color"/>
-  <arg name="INPUT_POINTCLOUD" default="/pointcloud_model_generator/output"/>
+  <!-- <arg name="CAMERA_INFO" default="/multisense/left/camera_info"/> -->
+  <!-- <arg name="INPUT_IMAGE" default="/multisense/left/image_rect_color"/> -->
+  <!-- <arg name="INPUT_POINTCLOUD" default="/multisense/resized_1_4/organized_image_points2_color"/> -->
+
+  <!-- for gazebo simulation -->
+  <arg name="CAMERA_INFO" default="/xtion/depth/camera_info"/>
+  <arg name="INPUT_IMAGE" default="/xtion/rgb/image_raw"/>
+  <arg name="INPUT_POINTCLOUD" default="/xtion/depth/points"/>
+
+  <node pkg="nodelet" type="nodelet" name="obstacle_avoidance_manager" args="manager">
+  </node>
 
   <node pkg="jsk_footstep_planner" type="footstep_array_to_bounding_box_array.py" name="footstep_to_bounding_box" output="screen">
     <remap from="~input" to="$(arg FOOTSTEP_ARRAY)"/>
-    <remap from="~output/box" to="/footstep_to_bounding_box/output"/>
     <rosparam>
      z_max : 0.15
      z_min : 0.03
+     publish_once : False
     </rosparam>
   </node>
+
 
   <node pkg="jsk_pcl_ros" type="attention_clipper" name="footstep_attention_clipper" output="screen">
     <remap from="~input/points" to="$(arg INPUT_POINTCLOUD)"/>
@@ -21,16 +30,60 @@
     </rosparam>
   </node>
 
-  <node pkg="nodelet" type="nodelet" name="footstep_indices_manager" args="manager">
+  <node pkg="jsk_footstep_planner" type="footstep_array_to_bounding_box_array.py" name="footstep_onfoot_bounding_box" output="screen">
+    <remap from="~input" to="$(arg FOOTSTEP_ARRAY)"/>
+    <rosparam>
+     z_max : 0.03
+     z_min : -0.03
+     publish_once : False
+    </rosparam>
   </node>
-  <node pkg="nodelet" type="nodelet" name="extract_indices" args="load pcl/ExtractIndices footstep_indices_manager">
+
+  <node pkg="jsk_pcl_ros" type="attention_clipper" name="points_on_foot" output="screen">
+    <!-- <remap from="~input" to="$(arg CAMERA_INFO)"/> -->
+    <remap from="~input/points" to="$(arg INPUT_POINTCLOUD)"/>
+    <remap from="~input/box_array" to="/footstep_onfoot_bounding_box/output"/>
+    <rosparam>
+      use_multiple_attention: true
+    </rosparam>
+  </node>
+
+  <node pkg="jsk_pcl_ros" type="point_indices_to_mask_image" name="foot_mask_image" output="screen">
+    <remap from="~input" to="points_on_foot/output/point_indices"/>
+    <remap from="~input/image" to="$(arg INPUT_IMAGE)"/>
+  </node>
+
+  <node pkg="jsk_perception" type="apply_mask_image" name="apply_mask_image">
+    <remap from="~input" to="$(arg INPUT_IMAGE)" />
+    <remap from="~input/mask" to="foot_mask_image/output" />
+  </node>
+
+  <node pkg="image_view" type="image_view" name="mask_image_view">
+    <remap from="image" to="foot_mask_image/output"/>
+  </node>
+  <node pkg="image_view" type="image_view" name="apply_mask_image_view">
+    <remap from="image" to="apply_mask_image/output"/>
+  </node>
+
+  <!-- <node pkg="jsk_pcl_ros" type="roi_clipper" name="footstep_roi_clipper" output="screen"> -->
+  <!--   <remap from="~input/image" to="$(arg INPUT_IMAGE)"/> -->
+  <!--   <remap from="~input/camera_info" to="/footstep_image_clipper/output"/> -->h
+  <!-- </node> -->
+
+
+  <node pkg="nodelet" type="nodelet" name="extract_obstacle_indices" args="load pcl/ExtractIndices obstacle_avoidance_manager">
     <remap from="~input" to="$(arg INPUT_POINTCLOUD)" />
     <remap from="~indices" to="footstep_attention_clipper/output/point_indices" />
-    <remap from="~output" to="extract_indices/output" />
   </node>
+
+  <node pkg="nodelet" type="nodelet" name="extract_foot_image_indices" args="load pcl/ExtractIndices obstacle_avoidance_manager">
+    <remap from="~input" to="$(arg INPUT_POINTCLOUD)"/>
+    <remap from="~indices" to="points_on_foot/output/point_indices"/>
+  </node>
+
   <node pkg="nodelet" type="nodelet"
         name="cluster_decomposer"
-        args="load jsk_pcl/ClusterPointIndicesDecomposerZAxis footstep_indices_manager"
+        args="load jsk_pcl/ClusterPointIndicesDecomposerZAxis obstacle_avoidance_manager"
         output="screen">
     <remap from="~input" to="$(arg INPUT_POINTCLOUD)" />
     <remap from="~target" to="/footstep_attention_clipper/output/cluster_point_indices" />
@@ -39,8 +92,5 @@
       publish_tf: false
     </rosparam>
   </node>
-  
-  <!-- <node pkg="jsk_perception" type="edge_detecotor" name="obstacle_edge_detector"> -->
-  <!--   <remap INPUT="$(arg INPUT_IMAGE)" /> -->
-  <!-- </node> -->
+
 </launch>
